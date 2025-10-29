@@ -62,8 +62,6 @@ const PROTECTED_TOKENS = new Set([
   "Head Office","Factory","Works","Website","WhatsApp","Whatsapp","Whats app","Phone",
   "Brand","Brands","names","name","features","feature","specification","specifications","specs","model","models","type","types",
   "descriptions","description","Appllications","application","Machine_id","Machine ID","ID",
-  
-  
 
   // ─── Regions ───
   "delhi", "india", "bangladesh", "ethiopia",
@@ -106,6 +104,7 @@ const PROTECTED_TOKENS = new Set([
   "dy-1502", "dy-908", "dy-912", "dy915-120", "dy918-120","dy cs3000",
   "duke-single-head","duke multi-head","duke multi head","duke multihead",
   "dukejia-single-head","dukejia multi-head","dukejia multi head","dukejia multihead",
+
   // ─── Non-embroidery models (brand-relevant) ───
   "dy-cs3000", "dy-pe750x600", "dy-sk-d2-2.0rh"
 ]);
@@ -118,7 +117,8 @@ function cleanForEmbedding(s = "") {
     .split(/\s+/)
     .filter(Boolean)
     .filter(t => {
-      if (PROTECT.has(t)) return true;
+      // FIXED: was PROTECT.has(t)
+      if (PROTECTED_TOKENS.has(t)) return true;
       if (EN_STOP.has(t)) return false;
       return true;
     })
@@ -221,7 +221,7 @@ export default async function handler(req, res) {
       .join("\n\n");
 
     const languageGuide = mode === "hinglish"
-      ? `REPLY LANGUAGE: Hinglish (Hindi in Latin script, e.g., "Dukejia ka focus automation par hai"). Do NOT use Devanagari.`
+      ? `REPLY LANGUAGE: Hinglish (Hindi in Latin script). Do NOT use Devanagari.`
       : `REPLY LANGUAGE: English. Professional and concise.`;
 
     const systemInstruction = `

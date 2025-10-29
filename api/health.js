@@ -1,11 +1,10 @@
-// /api/health.js (Vercel serverless, Node runtime)
-
+// /api/health.js — Vercel serverless function (Node.js runtime)
 export const config = { runtime: "nodejs" };
 
 const BOT_NAME = process.env.BOT_NAME || "Duki";
 
 export default async function handler(req, res) {
-  // CORS + preflight
+  // ---- CORS + preflight ----
   const origin = req.headers.origin || "*";
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -21,10 +20,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method Not Allowed" });
   }
 
+  // ---- Healthy response ----
   return res.status(200).json({
     ok: true,
     service: "duki",
     bot: BOT_NAME,
     ts: Date.now(),
+    uptime: process.uptime(),
+    env: process.env.VERCEL_ENV || "production",
   });
 }

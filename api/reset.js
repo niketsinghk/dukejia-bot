@@ -1,14 +1,14 @@
-// /api/reset.js (or /api/reset.mjs)
+// /api/reset.js — Vercel serverless (Node.js runtime)
 export const config = { runtime: "nodejs" };
 
-// Keep a per-cold-start in-memory session cache (serverless-safe)
+// Keep a per-cold-start in-memory session cache (safe on serverless)
 const SESSIONS =
   globalThis.__DUKEJIA_SESSIONS__ ?? (globalThis.__DUKEJIA_SESSIONS__ = new Map());
 
 const BOT_NAME = process.env.BOT_NAME || "Duki";
 
 export default async function handler(req, res) {
-  // CORS + preflight
+  /* ---------- CORS + preflight ---------- */
   const origin = req.headers.origin || "*";
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method Not Allowed" });
   }
 
-  // Body may already be parsed by Vercel; be flexible
+  /* ---------- Parse body safely ---------- */
   let body = {};
   try {
     body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     body = {};
   }
 
-  // Try session ID from body, header, or cookie (support old+new cookie names)
+  /* ---------- Extract session ID ---------- */
   const cookie = req.headers.cookie || "";
   const fromCookie =
     cookie.match(/(?:^|;\s*)sid=([^;]+)/)?.[1] ||
@@ -43,17 +43,21 @@ export default async function handler(req, res) {
     fromCookie ||
     "anon";
 
-  // Delete any cached session for this sid
+  /* ---------- Reset in-memory session ---------- */
   try {
     SESSIONS.delete(String(sid));
-  } catch {}
+  } catch {
+    // ignore
+  }
 
-  // If you want to clear a cookie on the client, uncomment below:
+  // Optional: clear cookie for client
   // res.setHeader("Set-Cookie", "sid=; Max-Age=0; Path=/; SameSite=Lax");
 
+  /* ---------- Respond ---------- */
   return res.status(200).json({
     ok: true,
     sessionId: String(sid),
     bot: BOT_NAME,
+    message: "Session cleared successfully",
   });
 }

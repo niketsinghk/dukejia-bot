@@ -1,16 +1,17 @@
-// /api/session.js (Vercel serverless, Node runtime)
-
+// /api/session.js — Vercel serverless (Node.js runtime)
 export const config = { runtime: "nodejs" };
 
-// Use a shared in-memory map per cold start (serverless-safe).
-// Prefer new Dukejia map; fall back to legacy HCA map if present.
+// Shared in-memory map per cold start (serverless-safe).
+// Prefer Dukejia map; fall back to legacy HCA map if present.
 const SESSIONS =
   globalThis.__DUKEJIA_SESSIONS__ ??
   globalThis.__HCA_SESSIONS__ ??
   (globalThis.__DUKEJIA_SESSIONS__ = new Map());
 
+const BOT_NAME = process.env.BOT_NAME || "Duki";
+
 export default async function handler(req, res) {
-  // CORS + preflight
+  /* ---------- CORS + preflight ---------- */
   const origin = req.headers.origin || "*";
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method Not Allowed" });
   }
 
-  // Derive SID from header or cookies (support old/new names)
+  /* ---------- Extract session ID (header or cookies) ---------- */
   const cookie = req.headers.cookie || "";
   const cookieSid =
     cookie.match(/(?:^|;\s*)sid=([^;]+)/)?.[1] ||
@@ -36,17 +37,20 @@ export default async function handler(req, res) {
     cookieSid ||
     "anon";
 
+  /* ---------- Read session safely ---------- */
   const sess = SESSIONS.get(String(sid)) || {};
   const history = Array.isArray(sess.history) ? sess.history : [];
 
-  // Provide a helpful, consistent payload
+  /* ---------- Response ---------- */
   return res.status(200).json({
     ok: true,
+    bot: BOT_NAME,
     sessionId: String(sid),
     historyLength: history.length || 0,
     messages: history,
     createdAt: sess.createdAt || null,
     lastSeen: sess.lastSeen || null,
     hits: sess.hits || 0,
+    env: process.env.VERCEL_ENV || "production",
   });
 }

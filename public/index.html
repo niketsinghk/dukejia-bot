@@ -1,9 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Duki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body{ margin:0; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji"; }
+    :root{ --hca-pur:#a29bfe; --hca-blue:#7aa2ff; --hca-bg:#faf9f6; --hca-dark:#0f172a; --hca-muted:#6b7280; --hca-radius:16px; }
+
+    /* ===== Widget shell ===== */
+    .hca-fab{
+      position:fixed; right:34px; bottom:43px; width:26px; height:8px; border-radius:50%;
+      background:linear-gradient(135deg,var(--hca-pur),var(--hca-blue));
+      display:flex; align-items:center; justify-content:center; box-shadow:0 12px 32px rgba(0,0,0,.18);
+      cursor:pointer; z-index:9999; user-select:none;
+    }
+    .hca-fab img{ width:176px; height:100px; display:block; filter:none !important; }
+
+    .hca-panel{
+      position:fixed; right:24px; bottom:100px; width:310px; height:420px; background:#faf9f6; border-radius:18px;
+      box-shadow:0 20px 40px rgba(0,0,0,.22); display:none; flex-direction:column; overflow:hidden; z-index:10000;
+    }
+    .hca-panel.open{ display:flex; }
+
+    .hca-head{
+      background:linear-gradient(135deg,var(--hca-pur),var(--hca-blue));
+      padding:12px 14px; color:#faf9f6; font:700 16px Inter,system-ui; display:flex; justify-content:space-between; align-items:center;
+    }
+    .hca-head-left{ display:flex; align-items:center; gap:10px; }
+    .hca-head-left img{ width:24px; height:24px; display:block; border-radius:6px; filter:none !important; }
+    .hca-actions{ display:flex; gap:8px; }
+    .hca-btn{ background:rgba(255,255,255,.2); border:0; color:#faf9f6; width:28px; height:28px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .hca-btn:hover{ background:rgba(255,255,255,.3); }
+
+    .hca-body{ flex:1; background:#f8fafc; padding:12px; overflow:auto; }
+    .hca-row{ display:flex; gap:8px; align-items:flex-end; margin:8px 0; }
+    .hca-row.user{ justify-content:flex-end; flex-direction:row-reverse; }
+
+    /* Avatar uses <img> so PNG transparency is preserved */
+    .hca-avatar{ width:30px; height:30px; flex:0 0 30px; display:flex; align-items:center; justify-content:center; }
+    .hca-avatar img{ width:100%; height:100%; object-fit:contain; display:block; }
+
+    .hca-bubble{ max-width:76%; padding:10px 12px; border-radius:14px; font:500 14px/1.5 Inter,system-ui; word-wrap:break-word; }
+    .hca-row.bot  .hca-bubble{ background:#faf9f6; color:#111; border:1px solid #e5e7eb; border-bottom-left-radius:6px; box-shadow:0 2px 8px rgba(15,23,42,.06); }
+    .hca-row.user .hca-bubble{ background:#8c84f5; color:#faf9f6; border-bottom-right-radius:6px; text-align:right; margin-left:auto; }
+
+    .hca-row.bot .hca-bubble code{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+      background:#f1f5f9; padding:0 .25em; border-radius:4px;
+    }
+    .hca-row.bot .hca-bubble a{ color:#8c84f5; text-decoration:underline; }
+
+    .hca-foot{ padding:10px; background:#faf9f6; border-top:1px solid #e5e7eb; display:flex; gap:8px; }
+    .hca-input{ flex:1; border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; font:500 14px Inter,system-ui; }
+    .hca-send{ background:#833ade; color:#faf9f6; border:0; border-radius:12px; /* font-weight:700;*/ cursor:pointer; }
+    .hca-send[disabled]{ opacity:.6; cursor:not-allowed; }
+
+    /* Typing indicator */
+    .hca-typing-row{display:flex;gap:8px;align-items:flex-end;margin:8px 0;}
+    .hca-typing-bubble{background:#8c84f5;border:1px solid #e5e7eb;border-radius:16px;padding:8px 12px;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+    .hca-typing-dot{width:6px;height:6px;border-radius:50%;background:#000;opacity:.4;animation:hcaBlink 1.4s infinite;}
+    .hca-typing-dot:nth-child(2){animation-delay:.2s;}
+    .hca-typing-dot:nth-child(3){animation-delay:.4s;}
+    @keyframes hcaBlink{0%,80%,100%{opacity:.4;transform:translateY(0);}40%{opacity:1;transform:translateY(-2px);} }
+
+    /* Responsive */
+    @media (max-width:520px){ .hca-panel{ right:10px; left:10px; width:auto; height:70vh; } }
+
+    /* Hint bubble */
+    .hca-hint{
+      position:fixed; right:86px; bottom:30px; max-width:240px; background:#faf9f6; color:#0f172a;
+      border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; font:600 14px/1.35 Inter,system-ui;
+      box-shadow:0 10px 30px rgba(0,0,0,.12); opacity:0; transform:translateY(8px);
+      pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:10001;
+      display:flex; align-items:flex-start; gap:8px;
+    }
+    .hca-hint.show{ opacity:1; transform:translateY(0); pointer-events:auto; }
+    .hca-hint:after{
+      content:""; position:absolute; right:-8px; bottom:12px; width:0; height:0;
+      border-left:10px solid #faf9f6; border-top:8px solid transparent; border-bottom:8px solid transparent;
+    }
+
+    /* Subtle float motion (works for PNG too) */
+    #hca-fab-icon, #hca-head-icon{ animation: dukiFloat 4.8s ease-in-out infinite; transform-origin:50% 60%; }
+    .hca-row.bot .hca-avatar{ animation: dukiAvatarFloat 5.2s ease-in-out infinite; transform-origin:50% 70%; }
+
+    @keyframes dukiFloat{
+      0%{transform:translateY(0) rotate(0)}
+      25%{transform:translateY(-2px) rotate(2deg)}
+      50%{transform:translateY(0) rotate(0)}
+      75%{transform:translateY(2px) rotate(-2deg)}
+      100%{transform:translateY(0) rotate(0)}
+    }
+    @keyframes dukiAvatarFloat{
+      0%{transform:translateY(0) rotate(0) scale(1)}
+      25%{transform:translateY(-1.5px) rotate(1.2deg) scale(1.01)}
+      50%{transform:translateY(0) rotate(0) scale(1)}
+      75%{transform:translateY(1.5px) rotate(-1.2deg) scale(0.995)}
+      100%{transform:translateY(0) rotate(0) scale(1)}
+    }
+  </style>
+</head>
+<body>
+
 <div id="hca-chat-root"></div>
 <script>
 (() => {
-  /* ---------- ICONS (now using external SVGs) ---------- */
-  const BASE_ICON_URL = "https://www.svgrepo.com/show/339963/chat-bot.svg";
-  const BOT_ICON_URL  = "https://www.svgrepo.com/show/334455/bot.svg";
+  /* ---------- ICONS: PNG (transparent) ---------- */
+  const ICON_PATH = "duke.png";   // ensure duki.png is next to this HTML
+  const BASE_ICON_URL = ICON_PATH;
+  const BOT_ICON_URL  = ICON_PATH;
   const USER_ICON_URL = "https://www.svgrepo.com/show/532363/user-alt-1.svg";
 
   window.HCA_BASE_ICON = BASE_ICON_URL;
@@ -14,158 +123,66 @@
   const API_BASE = window.HCA_API_BASE || "";
   const API_URL  = `${API_BASE}/api/ask`;
   const HEALTH   = `${API_BASE}/api/health`;
-  const RESET    = `${API_BASE}/api/reset`; // optional
+  const RESET    = `${API_BASE}/api/reset`;
 
-  /* ---------- Time-based greeting (IST) ---------- */
-  function getISTGreeting() {
-    const hour = Number(new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false
-    }).format(new Date()));
+  /* ---------- Greeting ---------- */
+  function getISTGreeting(){
+    const hour = Number(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",hour:"2-digit",hour12:false}).format(new Date()));
     if (hour < 5)  return "Good night";
     if (hour < 12) return "Good morning";
     if (hour < 17) return "Good afternoon";
     if (hour < 21) return "Good evening";
     return "Good night";
   }
-  function buildWelcomeLine() {
-    const g = getISTGreeting();
-    return `${g}! I’m HCA Assistant`;
-  }
+  const buildWelcomeLine = () => `${getISTGreeting()}! I’m Duki`;
 
-  /* ---------- SESSION ID (persistent across reloads) ---------- */
-  function getOrCreateSessionId() {
-    const KEY = "hca_session_id";
-    try {
+  /* ---------- Session ---------- */
+  function getOrCreateSessionId(){
+    const KEY = "dukejia_session_id";
+    try{
       let sid = localStorage.getItem(KEY);
-      if (!sid) {
-        sid = (crypto && crypto.randomUUID)
-          ? crypto.randomUUID()
-          : "sid-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      if(!sid){
+        sid = (crypto && crypto.randomUUID) ? crypto.randomUUID()
+             : "sid-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
         localStorage.setItem(KEY, sid);
       }
       return sid;
-    } catch {
-      return (crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : "sid-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }catch{
+      return (crypto && crypto.randomUUID) ? crypto.randomUUID()
+           : "sid-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
     }
   }
   const SESSION_ID = getOrCreateSessionId();
 
-  /* ---------- UI MOUNT ---------- */
+  /* ---------- UI ---------- */
   const root = document.getElementById("hca-chat-root");
   root.innerHTML = `
-  <style>
-    :root{ --hca-blue:#2563eb; --hca-blue-2:#7aa2ff; --hca-bg:#ffffff; --hca-dark:#0f172a; --hca-muted:#6b7280; --hca-radius:16px; }
+    <div class="hca-fab" aria-label="Open Duki" title="Duki">
+      <img id="hca-fab-icon" alt="Chat"/>
+    </div>
 
-    .hca-fab{
-      position:fixed; right:18px; bottom:18px; width:58px; height:58px; border-radius:50%;
-      background:linear-gradient(135deg,var(--hca-blue),var(--hca-blue-2)); color:#fff;
-      display:flex; align-items:center; justify-content:center; box-shadow:0 12px 32px rgba(0,0,0,.18);
-      cursor:pointer; z-index:9999; font-size:22px; user-select:none;
-    }
-    .hca-fab img{ width:26px; height:26px; display:block; filter:brightness(0) invert(1); }
+    <div class="hca-hint" id="hca-hint" role="status" aria-live="polite">
+      <span id="hca-hint-text">Need help with sewing solutions? I’m here.</span>
+      <button type="button" class="hca-hint-close" title="Dismiss" aria-label="Dismiss">×</button>
+    </div>
 
-    .hca-panel{
-      position:fixed; right:24px; bottom:92px; width:380px; height:520px; background:#fff; border-radius:18px;
-      box-shadow:0 20px 40px rgba(0,0,0,.22); display:none; flex-direction:column; overflow:hidden; z-index:10000;
-    }
-    .hca-panel.open{ display:flex; }
-
-    .hca-head{
-      background:linear-gradient(135deg,var(--hca-blue),var(--hca-blue-2));
-      padding:12px 14px; color:#fff; font:700 16px Inter,system-ui; display:flex; justify-content:space-between; align-items:center;
-    }
-    .hca-head-left{ display:flex; align-items:center; gap:10px; }
-    .hca-head-left img{ width:22px; height:22px; border-radius:6px; filter:brightness(0) invert(1); }
-    .hca-actions{ display:flex; gap:8px; }
-    .hca-btn{ background:rgba(255,255,255,.2); border:0; color:#fff; width:28px; height:28px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-    .hca-btn:hover{ background:rgba(255,255,255,.3); }
-
-    .hca-body{ flex:1; background:#f8fafc; padding:12px; overflow:auto; }
-
-    .hca-row{ display:flex; gap:8px; align-items:flex-end; margin:8px 0; }
-    .hca-row.user{ justify-content:flex-end; flex-direction:row-reverse; }
-    .hca-avatar{ width:28px; height:28px; border-radius:50%; background:#e5e7eb center/contain no-repeat; flex:0 0 28px; }
-    .hca-bubble{ max-width:72%; padding:10px 12px; border-radius:14px; font:500 14px/1.5 Inter,system-ui; word-wrap:break-word; }
-    .hca-row.bot  .hca-bubble{ background:#fff; color:#111; border:1px solid #e5e7eb; border-bottom-left-radius:6px; }
-    .hca-row.user .hca-bubble{ background:#2563eb; color:#fff; border-bottom-right-radius:6px; text-align:right; margin-left:auto; }
-
-    .hca-row.bot .hca-bubble strong{ font-weight:800; }
-    .hca-row.bot .hca-bubble em{ font-style:italic; }
-    .hca-row.bot .hca-bubble code{
-      font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      background:#f1f5f9; padding:0 .25em; border-radius:4px;
-    }
-    .hca-row.bot .hca-bubble a{ color:#1d4ed8; text-decoration:none; border-bottom:1px dotted #93c5fd; }
-    .hca-row.bot .hca-bubble a:hover{ text-decoration:underline; }
-
-    .hca-row.bot .hca-bubble ul{ margin:6px 0 0 18px; padding:0; }
-    .hca-row.bot .hca-bubble li{ margin:4px 0; }
-
-    .hca-foot{ padding:10px; background:#fff; border-top:1px solid #e5e7eb; display:flex; gap:8px; }
-    .hca-input{ flex:1; border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; font:500 14px Inter,system-ui; }
-    .hca-send{ background:#2563eb; color:#fff; border:0; border-radius:12px; padding:10px 14px; font-weight:700; cursor:pointer; }
-    .hca-send[disabled]{ opacity:.6; cursor:not-allowed; }
-
-    /* Typing indicator */
-    .hca-typing-row{display:flex;gap:8px;align-items:flex-end;margin:8px 0;}
-    .hca-typing-bubble{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:8px 12px;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(0,0,0,.15);}
-    .hca-typing-dot{width:6px;height:6px;border-radius:50%;background:#000;opacity:.4;animation:hcaBlink 1.4s infinite;}
-    .hca-typing-dot:nth-child(2){animation-delay:.2s;}
-    .hca-typing-dot:nth-child(3){animation-delay:.4s;}
-    @keyframes hcaBlink{0%,80%,100%{opacity:.4;transform:translateY(0);}40%{opacity:1;transform:translateY(-2px);} }
-
-    @media (max-width:520px){ .hca-panel{ right:10px; left:10px; width:auto; height:70vh; } }
-
-    /* Hint bubble */
-    .hca-hint{
-      position:fixed; right:86px; bottom:30px; max-width:240px; background:#fff; color:#0f172a;
-      border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; font:600 14px/1.35 Inter,system-ui;
-      box-shadow:0 10px 30px rgba(0,0,0,.12); opacity:0; transform:translateY(8px);
-      pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:10001;
-      display:flex; align-items:flex-start; gap:8px;
-    }
-    .hca-hint.show{ opacity:1; transform:translateY(0); pointer-events:auto; }
-    .hca-hint:after{
-      content:""; position:absolute; right:-8px; bottom:12px; width:0; height:0;
-      border-left:10px solid #fff; border-top:8px solid transparent; border-bottom:8px solid transparent;
-    }
-    .hca-hint #hca-hint-text{ flex:1 1 auto; }
-    .hca-hint .hca-hint-close{ flex:0 0 auto; margin-left:2; font-weight:900; cursor:pointer; opacity:.55; }
-    .hca-hint .hca-hint-close:hover{ opacity:1; }
-
-    /* Links visible in both bubbles */
-    .hca-bubble a{ text-decoration: underline; }
-    .hca-row.user .hca-bubble a{ color:#fff; }
-  </style>
-
-  <div class="hca-fab" aria-label="Open HCA Assistant" title="HCA Assistant">
-    <img id="hca-fab-icon" alt="Chat"/>
-  </div>
-
-  <div class="hca-hint" id="hca-hint" role="status" aria-live="polite">
-    <span id="hca-hint-text">Need help with sewing solutions? I’m here.</span>
-     <button type="button" class="hca-hint-close" title="Dismiss" aria-label="Dismiss">×</button>
-  </div>
-
-  <div class="hca-panel" role="dialog" aria-label="HCA Assistant">
-    <div class="hca-head">
-      <div class="hca-head-left">
-        <img id="hca-head-icon" alt="Assistant"/>
-        <span id="hca-title">HCA Assistant</span>
+    <div class="hca-panel" role="dialog" aria-label="Duki">
+      <div class="hca-head">
+        <div class="hca-head-left">
+          <img id="hca-head-icon" alt="Assistant"/>
+          <span id="hca-title">Duki</span>
+        </div>
+        <div class="hca-actions">
+          <button class="hca-btn" id="hca-refresh" title="Restart chat" aria-label="Restart chat">⟲</button>
+          <button class="hca-btn" id="hca-close" title="Close" aria-label="Close">✕</button>
+        </div>
       </div>
-      <div class="hca-actions">
-        <button class="hca-btn" id="hca-refresh" title="Restart chat" aria-label="Restart chat">⟲</button>
-        <button class="hca-btn" id="hca-close" title="Close" aria-label="Close">✕</button>
+      <div class="hca-body" id="hca-log"></div>
+      <div class="hca-foot">
+        <input class="hca-input" id="hca-input" placeholder="Ask something…"/>
+        <button class="hca-send" id="hca-send">Send</button>
       </div>
     </div>
-    <div class="hca-body" id="hca-log"></div>
-    <div class="hca-foot">
-      <input class="hca-input" id="hca-input" placeholder="Ask something…"/>
-      <button class="hca-send" id="hca-send">Send</button>
-    </div>
-  </div>
   `;
 
   /* ---------- Shortcuts ---------- */
@@ -181,21 +198,28 @@
   const hintText = $("#hca-hint-text");
   const hintClose = hint.querySelector(".hca-hint-close");
 
-  /* ---------- Icons ---------- */
-  $("#hca-fab-icon").src  = window.HCA_BASE_ICON;
-  $("#hca-head-icon").src = window.HCA_BASE_ICON;
+  /* ---------- Icons (with fallback) ---------- */
+  function setIcon(imgEl, url){
+    imgEl.loading = "eager";
+    imgEl.decoding = "async";
+    imgEl.src = url;
+    imgEl.onerror = () => {
+      imgEl.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><circle cx='14' cy='14' r='12' fill='%23e5e7eb'/></svg>";
+    };
+  }
+  setIcon(document.getElementById("hca-fab-icon"),  window.HCA_BASE_ICON);
+  setIcon(document.getElementById("hca-head-icon"), window.HCA_BASE_ICON);
 
-  /* ---------- Header session tag ---------- */
-  const titleEl = $("#hca-title");
-  if (titleEl) titleEl.textContent = "HCA Assistant";
+  /* ---------- Title ---------- */
+  const titleEl = $("#hca-title"); if (titleEl) titleEl.textContent = "Duki";
 
-  /* ---------- First message (IST greeting) ---------- */
+  /* ---------- First message ---------- */
   appendMsg(buildWelcomeLine(), "bot");
   hintText.textContent = buildWelcomeLine();
 
-  /* ---------- Hint logic ---------- */
-  const USED_KEY = "hca_used_this_session";
-  let memOK = true; try{ sessionStorage.setItem("_hca_test","1"); sessionStorage.removeItem("_hca_test"); }catch{ memOK=false; }
+  /* ---------- Hint logic (single declarations only) ---------- */
+  const USED_KEY = "dukejia_used_this_session";
+  let memOK = true; try{ sessionStorage.setItem("_dukejia_test","1"); sessionStorage.removeItem("_dukejia_test"); }catch{ memOK=false; }
   let usedInMem = false;
   const hasUsed  = () => memOK ? sessionStorage.getItem(USED_KEY) === "1" : usedInMem;
   const markUsed = () => { if(memOK){ sessionStorage.setItem(USED_KEY,"1"); } else { usedInMem = true; } };
@@ -204,7 +228,7 @@
   const HINT_DELAY_MS = 1000;
   const HINT_RESHOW_AFTER_CLOSE_MS = 10000;
   const HINT_IDLE_RESHOW_MS = 45000;
-  let hintTimer = null;
+  let hintTimer = null;   // <— declared ONCE
 
   function scheduleHint(ms){ clearTimeout(hintTimer); hintTimer = setTimeout(showHint, ms); }
   function showHint(){ if(!panel.classList.contains("open")) hint.classList.add("show"); }
@@ -216,107 +240,63 @@
 
   function togglePanel(show){
     panel.classList[show ? "add" : "remove"]("open");
-    if(show){
-      input.focus(); hideHint(); markUsed(); clearTimeout(hintTimer);
-    }
+    if(show){ input.focus(); hideHint(); markUsed(); clearTimeout(hintTimer); }
   }
   fab.onclick = () => togglePanel(true);
   closeBtn.onclick = () => { togglePanel(false); clearUsed(); scheduleHint(HINT_RESHOW_AFTER_CLOSE_MS); };
 
-  /* ---------- CONTACT AUTO-LINK HELPERS ---------- */
-  function addHttp(url){ return /^https?:\/\//i.test(url) ? url : `https://${url}`; }
-  function digits(s){ return String(s||"").replace(/[^\d]/g,""); }
-  function telHref(s){ return `tel:${digits(s)}`; }
-  function waHref(s){
-    let n = digits(s);
-    if (n.length <= 10) n = "91" + n; // assume local Indian number -> +91
-    return `https://wa.me/${n}`;
-  }
+  /* ---------- Markdown + helpers ---------- */
+  const addHttp = url => /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  const digits = s => String(s||"").replace(/[^\d]/g,"");
+  const telHref = s => `tel:${digits(s)}`;
+  const waHref = s => { let n = digits(s); if (n.length <= 10) n = "91" + n; return `https://wa.me/${n}`; };
 
-  /* ---------- Minimal Markdown renderer with SAFE autolinking ---------- */
   function renderMarkdown(input){
-    const escapeHtml = (s) =>
-      String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
+    const escapeHtml = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     const text = escapeHtml(input).replace(/\r\n/g, "\n");
-
     const inline = (s) => {
-      // Normalize visible wa.me URLs -> clean label// Explicit Call/Phone labels (not inside a tag)
-      s = s.replace(
-        /(?![^<]*>)(Call|Phone|Mobile|Number|Tel(?:ephone)?)\s*[:\-]?\s*([+]?[\d\s().-]{6,}\d)/gi,
-        (_m, label, num) =>
-          `<a href="${telHref(num)}" target="_blank" rel="noopener">${label}: ${num.replace(/\s+/g, " ").trim()}</a>`
-      );
-      s = s.replace(
-        /(?![^<]*>)(?:https?:\/\/)?wa\.me\/(\d{6,})/gi,
-        (_m, num) => `<a href="https://wa.me/${num}" target="_blank" rel="noopener">WhatsApp</a>`
-      );
-
-      // Markdown links
-      s = s.replace(
-        /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
-      );
-
-      // Emails (not inside a tag)
-      s = s.replace(
-        /(?![^<]*>)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
-        '<a href="mailto:$1" target="_blank" rel="noopener">$1</a>'
-      );
-
-      // Explicit WhatsApp labels (not inside a tag)
-      s = s.replace(
-        /(?![^<]*>)(WhatsApp|Whatsapp|WA)\s*[:\-]?\s*([+]?[\d\s().-]{6,}\d)/gi,
-        (_m, _w, num) => `<a href="${waHref(num)}" target="_blank" rel="noopener">WhatsApp: ${num.replace(/\s+/g," ").trim()}</a>`
-      );
-
-      // Generic phone numbers (not inside a tag)
-      s = s.replace(
-        /(?![^<]*>)(?<!\w)(\+?[\d][\d\s().-]{6,}\d)(?!\w)/g,
-        (m) => `<a href="${telHref(m)}" target="_blank" rel="noopener">${m}</a>`
-      );
-
-      // Bare URLs (not inside a tag)
-      s = s.replace(
-        /(?![^<]*>)(\b(?:https?:\/\/|www\.)[^\s<)]+[^\s<).,!?:;])/gi,
-        (m) => `<a href="${addHttp(m)}" target="_blank" rel="noopener">${m.replace(/^https?:\/\//i,'')}</a>`
-      );
-
-      // Code / bold / italics
+      s = s.replace(/(?![^<]*>)(Call|Phone|Mobile|Number|Tel(?:ephone)?)\s*[:\-]?\s*([+]?[\d\s().-]{6,}\d)/gi,
+        (_m, label, num) => `<a href="${telHref(num)}" target="_blank" rel="noopener">${label}: ${num.replace(/\s+/g," ").trim()}</a>`);
+      s = s.replace(/(?![^<]*>)(?:https?:\/\/)?wa\.me\/(\d{6,})/gi,
+        (_m, num) => `<a href="https://wa.me/${num}" target="_blank" rel="noopener">WhatsApp</a>`);
+      s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      s = s.replace(/(?![^<]*>)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '<a href="mailto:$1" target="_blank" rel="noopener">$1</a>');
+      s = s.replace(/(?![^<]*>)(WhatsApp|Whatsapp|WA)\s*[:\-]?\s*([+]?[\d\s().-]{6,}\d)/gi,
+        (_m, _w, num) => `<a href="${waHref(num)}" target="_blank" rel="noopener">WhatsApp: ${num.replace(/\s+/g," ").trim()}</a>`);
+      s = s.replace(/(?![^<]*>)(?<!\w)(\+?[\d][\d\s().-]{6,}\d)(?!\w)/g,
+        (m) => `<a href="${telHref(m)}" target="_blank" rel="noopener">${m}</a>`);
+      s = s.replace(/(?![^<]*>)(\b(?:https?:\/\/|www\.)[^\s<)]+[^\s<).,!?:;])/gi,
+        (m) => `<a href="${addHttp(m)}" target="_blank" rel="noopener">${m.replace(/^https?:\/\//i,'')}</a>`);
       s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
       s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
       s = s.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, '$1<em>$2</em>');
       return s;
     };
-
-    // Blocks + simple lists
-    const lines = text.split("\n");
-    let html = "", inList = false;
-    const closeList = () => { if(inList){ html += "</ul>"; inList = false; } };
-
-    for (let i = 0; i < lines.length; i++){
-      const line = lines[i];
-      const m = line.match(/^\s*[*-]\s+(.+)/);
-      if (m){ if(!inList){ html += "<ul>"; inList = true; } html += `<li>${inline(m[1].trim())}</li>`; continue; }
-      if (line.trim() === ""){ closeList(); html += "<br/>"; continue; }
-      closeList(); html += inline(line) + "<br/>";
+    const lines = text.split("\n"); let html="", inList=false; const closeList=()=>{if(inList){html+="</ul>";inList=false;}};
+    for (let i=0;i<lines.length;i++){
+      const line=lines[i]; const m=line.match(/^\s*[*-]\s+(.+)/);
+      if(m){ if(!inList){html+="<ul>";inList=true;} html+=`<li>${inline(m[1].trim())}</li>`; continue; }
+      if(line.trim()===""){ closeList(); html+="<br/>"; continue; }
+      closeList(); html+=inline(line)+"<br/>";
     }
-    closeList();
-    return html;
+    closeList(); return html;
   }
 
-  /* ---------- Message helpers ---------- */
+  /* ---------- Messages (PNG avatar with <img>) ---------- */
   function appendMsg(text, who="bot"){
     const row = document.createElement("div");
     row.className = `hca-row ${who}`;
 
     const avatar = document.createElement("div");
     avatar.className = "hca-avatar";
-    avatar.style.backgroundImage = `url('${who === "bot" ? window.HCA_BOT_ICON : window.HCA_USER_ICON}')`;
+    const img = document.createElement("img");
+    img.alt = who === "bot" ? "Duki" : "You";
+    img.src = who === "bot" ? window.HCA_BOT_ICON : window.HCA_USER_ICON;
+    img.decoding = "async";
+    avatar.appendChild(img);
 
     const bubble = document.createElement("div");
     bubble.className = "hca-bubble";
-    // Use HTML for both bot and user so contact details are clickable
     bubble.innerHTML = renderMarkdown(text);
 
     row.appendChild(avatar);
@@ -326,7 +306,7 @@
     return bubble;
   }
 
-  /* ---------- Typing indicator ---------- */
+  /* ---------- Typing indicator (PNG avatar) ---------- */
   let typingEl=null;
   function showTyping(show){
     if(show){
@@ -335,7 +315,9 @@
       row.className="hca-row bot hca-typing-row";
       const avatar=document.createElement("div");
       avatar.className="hca-avatar";
-      avatar.style.backgroundImage=`url('${window.HCA_BOT_ICON}')`;
+      const img = document.createElement("img");
+      img.alt="Duki"; img.src = window.HCA_BOT_ICON; img.decoding="async";
+      avatar.appendChild(img);
       const bubble=document.createElement("div");
       bubble.className="hca-typing-bubble";
       for(let i=0;i<3;i++){const d=document.createElement("span");d.className="hca-typing-dot";bubble.appendChild(d);}
@@ -344,89 +326,58 @@
     }else if(typingEl){typingEl.remove();typingEl=null;}
   }
 
+  /* ---------- Reset / Ask ---------- */
   async function resetChat(){
     log.innerHTML = "";
     appendMsg(buildWelcomeLine(), "bot");
-
-    try{
-      localStorage.removeItem("hca_history");
-      sessionStorage.removeItem("hca_history");
-    }catch(_){}
-
+    try{ localStorage.removeItem("dukejia_history"); sessionStorage.removeItem("dukejia_history"); }catch(_){}
     try{
       await fetch(RESET, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-ID": SESSION_ID
-        },
-        credentials: "include",
-        body: JSON.stringify({ sessionId: SESSION_ID })
+        method:"POST", headers:{ "Content-Type":"application/json", "X-Session-ID": SESSION_ID },
+        credentials:"include", body: JSON.stringify({ sessionId: SESSION_ID })
       });
-    }catch(_ignored){}
-
-    input.value = ""; input.focus();
-    scheduleHint(800);
+    }catch(_){}
+    input.value=""; input.focus(); scheduleHint(800);
   }
   refreshBtn.onclick = resetChat;
 
-  /* ---------- Ask (now sends SESSION_ID in header + body) ---------- */
   async function ask(){
-    const q = input.value.trim();
-    if(!q) return;
-
+    const q = input.value.trim(); if(!q) return;
     const cmd = q.toLowerCase();
     if(cmd === "/restart" || cmd === "/refresh"){ input.value=""; resetChat(); return; }
-
-    appendMsg(q, "user");
-    hideHint();
-
-    input.value = "";
-    input.disabled = true;
-    sendBtn.disabled = true;
-    showTyping(true);
-
+    appendMsg(q, "user"); hideHint();
+    input.value=""; input.disabled=true; sendBtn.disabled=true; showTyping(true);
     try{
       const res = await fetch(API_URL, {
         method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "X-Session-ID": SESSION_ID
-        },
-        credentials: "include",
+        headers:{ "Content-Type":"application/json", "X-Session-ID": SESSION_ID },
+        credentials:"include",
         body: JSON.stringify({ question: q, sessionId: SESSION_ID })
       });
-
-      const text = await res.text();
-      let data = {};
-      try { data = JSON.parse(text); } catch { data = { answer: text }; }
-
+      const text = await res.text(); let data = {};
+      try{ data = JSON.parse(text); }catch{ data = { answer: text }; }
       if(!res.ok){
-        const errMsg = (data && (data.error || data.details || data.message)) || `HTTP ${res.status}`;
+        const errMsg = (data.error || data.details || data.message) || `HTTP ${res.status}`;
         appendMsg(String(errMsg), "bot");
-      } else {
-        const answer = data.answer || data.output || "Sorry, I couldn't find that in the PDF.";
-        appendMsg(answer, "bot");
+      }else{
+        appendMsg(data.answer || data.output || "Sorry, I couldn't find that.", "bot");
       }
     }catch(e){
       appendMsg("Server error. Please try again.", "bot");
     }finally{
-      showTyping(false);
-      input.disabled = false;
-      sendBtn.disabled = false;
-      input.focus();
-      clearTimeout(hintTimer);
-      scheduleHint(HINT_IDLE_RESHOW_MS);
+      showTyping(false); input.disabled=false; sendBtn.disabled=false; input.focus();
+      clearTimeout(hintTimer); scheduleHint(HINT_IDLE_RESHOW_MS);
     }
   }
+  document.getElementById("hca-send").onclick = ask;
+  document.getElementById("hca-input").addEventListener("keydown", (e)=>{ if(e.key==="Enter") ask(); });
 
-  sendBtn.onclick = ask;
-  input.addEventListener("keydown", (e)=>{ if(e.key==="Enter") ask(); });
-
-  /* ---------- Optional health check ---------- */
-  fetch(HEALTH, { credentials: "include" })
-    .then(r=>r.json())
-    .then(j=>console.log("HCA Assistant:", j))
-    .catch(()=>{});
+  /* Health/version pings */
+  fetch(HEALTH, { credentials:"include" }).then(r=>r.json()).then(j=>console.log("Duki:", j)).catch(()=>{});
+  fetch((window.HCA_API_BASE || "") + "/api/version", { credentials:"include" })
+    .then(r=>r.json()).then(info=>console.log("Duki build:", info)).catch(()=>{});
 })();
 </script>
+
+</body>
+</html>

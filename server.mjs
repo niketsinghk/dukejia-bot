@@ -1,4 +1,4 @@
-// server.mjs
+// server.mjs — Dukejia-bot (first-turn greeting trimmed to a single minimal line)
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -17,11 +17,17 @@ const PORT         = parseInt(process.env.PORT || "5173", 10);
 const TOP_K        = parseInt(process.env.TOP_K || "6", 10);
 const DATA_DIR     = path.join(__dirname, "data");
 const EMB_PATH     = path.join(DATA_DIR, "index.json");
-const PDF_PATH     = path.join(DATA_DIR, "knowledge.pdf");
-const HCA_PDF_PATH = path.join(DATA_DIR, "HCA.pdf");
 
 const GENERATION_MODEL = process.env.GENERATION_MODEL || "gemini-2.5-flash";
 const EMBEDDING_MODEL  = process.env.EMBEDDING_MODEL  || "text-embedding-004";
+const BOT_NAME         = process.env.BOT_NAME || "Duki";
+
+// NEW: point-wise reply toggle (server-side)
+const POINTWISE_MODE   = process.env.POINTWISE_MODE !== "false"; // default true
+console.log("POINTWISE_MODE:", process.env.POINTWISE_MODE, "=>", POINTWISE_MODE);
+
+// Optional: if your frontend already shows the greeting bubble, keep backend minimal on first 'hi'
+const FRONTEND_GREETS  = true;
 
 if (!process.env.GOOGLE_API_KEY) {
   console.error("❌ Missing GOOGLE_API_KEY in .env");
@@ -34,7 +40,7 @@ app.set("trust proxy", 1);
 
 app.use(
   cors({
-    origin: true,               // In prod: ['https://your-site.com', ...]
+    origin: true,
     credentials: true,
   })
 );
@@ -53,7 +59,7 @@ const llm      = genAI.getGenerativeModel({ model: GENERATION_MODEL });
 /* ─────────────────────────── In-Memory Sessions ──────────────────────── */
 const sessions = new Map(); // sid -> { history:[], createdAt, lastSeen, hits }
 
-/** Time-of-day greeting in IST */
+/** Time-of-day greeting in IST (kept for other uses if needed) */
 function getISTGreeting(now = new Date()) {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", {
@@ -69,23 +75,18 @@ function getISTGreeting(now = new Date()) {
   return "Good night";
 }
 
-/** Legacy local greeting (kept for small-talk templates if you want it) */
-function getTimeOfDayGreeting() {
-  const h = new Date().getHours();
-  if (h < 5)  return "Good night";
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  if (h < 21) return "Good evening";
-  return "Hello";
+/** First-turn minimal line ONLY when user greets and frontend already introduced the bot */
+function buildMinimalAssist(mode) {
+  return mode === "hinglish" ? "Kaise madad kar sakta hoon?" : "How can I assist you?";
 }
 
-/** Build first-turn greeting line in the detected mode */
+/** Build a full greeting (not used on first user 'hi' anymore) */
 function buildGreeting(mode) {
   const base = getISTGreeting();
   if (mode === "hinglish") {
-    return `${base}! Main HCA Assistant hoon — HCA, Duke & Duke-Jia (machines, spares, automation) mein madad karta hoon.`;
+    return `${base}! Main ${BOT_NAME} hoon. How can I help you today?`;
   }
-  return `${base}! I’m HCA Assistant — here to help with HCA, Duke & Duke-Jia machines, spares, and automation.`;
+  return `${base}! I’m ${BOT_NAME}. How can I help you today?`;
 }
 
 /** Attach or create session, echo X-Session-ID for debugging */
@@ -96,7 +97,7 @@ function sessionMiddleware(req, res, next) {
     res.cookie("sid", sid, {
       httpOnly: true,
       sameSite: "Lax",
-      secure: !!process.env.COOKIE_SECURE, // set COOKIE_SECURE=1 behind HTTPS
+      secure: !!process.env.COOKIE_SECURE,
       maxAge: 1000 * 60 * 60 * 24 * 30,
     });
   }
@@ -169,8 +170,43 @@ const HINDI_STOPWORDS = new Set([
 ]);
 
 const PROTECTED_TOKENS = new Set([
-  "hca","hari","chand","anand","anil","duke","duke-jia","kansai","special","highlead","merrow","megasew","amf","reece",
-  "delhi","india","solution","solutions","automation","garment","leather","mattress","perforation","embroidery","vios","dukejia"
+  "hari","chand","anand","anil","hca","duke","duke-jia","dukejia","duki",
+  "delhi","india","automation","garment","leather","perforation","embroidery","quilting","sewing",
+  "pattern","dst","tajima","servo","36v",
+
+  // (models trimmed for brevity; add as needed)
+  "duke", "duke-jia", "dukejia", "duki","contact","call","email","address","Branches","Headquarters", 
+  "Head Office","Factory","Works","WhatsApp","Whatsapp","Whats app","Phone", "Brand","Brands","names","name","features",
+  "feature","specification","specifications","specs","model","models","type","types", "descriptions","description","Appllications",
+  "application","Machine_id","Machine ID","ID","needle","niddle","heads","head","speed", "rpm","Embroidery Area","phase","phases",
+
+  // ─── Regions ─── //
+  "delhi", "india", "bangladesh", "ethiopia", 
+
+  // ─── Domains / industries ─── //
+  "automation", "solution", "solutions", "garment", "leather", "mattress", "perforation", "embroidery", "quilting", "sewing", "upholstery","pattern", 
+
+  // ─── Attachments / techniques ─── 
+  "sequin", "sequins", "bead", "beads", "cording", "coiling", "taping", "rhinestone", "chenille", "chainstitch", "cap", "tubular",
+
+  // ─── Control systems / file formats ─── 
+  "dahao", "a18", "dst", "tajima", "usb", "u-disk", "lcd", "touchscreen", "network", 
+
+  // ─── Features / safety / mechanics ───
+  "auto-trimming", "automatic-trimming", "auto-color-change", "automatic-color-change", "thread-break-detection", "power-failure-recovery", 
+  "servo", "servo-motor", "36v", "36v-dc", "oil-mist", "dust-clean", "wide-voltage", "270-cap-frame", 
+
+  // ─── Machine models (embroidery & related) ─── 
+  "es-1300","es 1300","dy pe750x600","halo-100", "dy-601ctm","dy sk d2-2.0rh", "dy-606", "dy-606h", "dy-606hc", "dy-606l", "dy-606xl",
+  "dy-606s", "dy-606+1ct", "dy-606+1pd", "dy-602", "dy-602h", "dy-602hc", "dy-602l", "dy-602xl", "dy-602s", "dy-602+1ct", "dy-602+1pd",
+  "dy 601ctm", "dy 606+6", "dy602+2", "dy-606+6","dy 908","dy 912","dy 915-120","dy 918-120", "dy 1201", "dy 1201l", "dy 1201h", "dy 1201xl", "dy 1201s",
+  "dy-1201", "dy-1201l", "dy-1201h", "dy-1201xl", "dy-1201s","dy Halo-100", "dy-1201+1ct", "dy-1201+1pd","dy 1204","dy 1206","dy 1206h","dy 1206hc", "dy-1204",
+  "dy-1206", "dy-1206h", "dy-1206hc","dy-1202h","dy 1202h", "dy-1202", "dy-1202l", "dy-1202h", "dy-1202xl", "dy-1202s","dy 918","dy 915", "dy 1502","dy-1502",
+  "dy-1202hc", "dy-1203h", "dy-1204", "dy-1206", "dy-1206h", "dy-1502", "dy-908", "dy-912", "dy915-120", "dy918-120","dy cs3000", "duke-single-head","duke multi-head",
+  "duke multi head","duke multihead", "dukejia-single-head","dukejia multi-head","dukejia multi head","dukejia multihead", 
+
+  // ─── Non-embroidery models (brand-relevant) ───
+  "dy-cs3000", "dy-pe750x600", "dy-sk-d2-2.0rh"
 ]);
 
 function cleanForEmbedding(s) {
@@ -195,86 +231,100 @@ function cosineSim(a, b) {
   for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
 }
-
 function loadVectors() {
   if (!fs.existsSync(EMB_PATH)) throw new Error(`Embeddings not found at ${EMB_PATH}. Run "npm run embed" first.`);
   const raw = JSON.parse(fs.readFileSync(EMB_PATH, "utf8"));
   if (!raw?.vectors?.length) throw new Error("Embeddings file has no vectors.");
   return raw.vectors;
 }
-
 let VECTORS = [];
-try {
-  VECTORS = loadVectors();
-  console.log(`🗂️  Loaded ${VECTORS.length} vectors (EN + Hinglish + Hindi stopwords)`);
-} catch (err) {
-  console.warn("⚠️", err.message);
-}
-
-/* Optional: hot-reload vectors if file changes during dev */
+try { VECTORS = loadVectors(); console.log(`🗂️  Loaded ${VECTORS.length} vectors`); }
+catch (err) { console.warn("⚠️", err.message); }
 try {
   fs.watch(EMB_PATH, { persistent: false }, () => {
-    try {
-      VECTORS = loadVectors();
-      console.log(`♻️  Reloaded ${VECTORS.length} vectors`);
-    } catch (e) {
-      console.warn("⚠️ Reload failed:", e?.message || e);
-    }
+    try { VECTORS = loadVectors(); console.log(`♻️  Reloaded ${VECTORS.length} vectors`); }
+    catch (e) { console.warn("⚠️ Reload failed:", e?.message || e); }
   });
 } catch { /* ignore */ }
 
-/* ────────────────────────── Small Talk Replies ───────────────────────── */
+/* ─────────────────────── Point-wise (server-side) ────────────────────── */
+function isListLike(text = "") {
+  return /^\s*([-*•]|\d+\.)\s+/m.test(text);
+}
+function toPointWise(text = "") {
+  if (!POINTWISE_MODE) return text;
+  if (!text || isListLike(text)) return text;
+
+  // Normalize whitespace
+  const norm = text.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").trim();
+
+  // Split on: blank lines | sentence boundaries | semicolons | bullets | " - " separators
+  let parts = norm
+    .split(/\n{2,}|(?<=[.!?])\s+(?=[A-Z(0-9])|[;•]|(?:\s+-\s+)/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  // Fallback: single newlines if we still didn't separate
+  if (parts.length < 2) {
+    const byLine = norm.split(/\n+/).map(s => s.trim()).filter(Boolean);
+    if (byLine.length >= 2) parts = byLine;
+  }
+  if (parts.length < 2) return text;
+
+  return parts
+    .map(p => p.replace(/^[•*\-]\s+/, ""))  // strip accidental bullet
+    .map(p => p.replace(/\s*\.\s*$/, ""))   // drop trailing dot
+    .map(p => `- ${p}`)
+    .join("\n");
+}
+
+/* ───────────────────────── Small Talk Replies ───────────────────────── */
 function makeSmallTalkReply(kind, mode) {
   const en = {
     hello: [
-      `${getTimeOfDayGreeting()}! 👋 I’m HCA’s assistant. Ask me anything about HCA (brands, machines, spares, service).`,
-      `Hello! 👋 How can I help you with HCA today?`,
-      `Hi! 👋 Try “About Duke-Jia (Embroidery + Perforation)”, “Suggest a machine for leather belts”, or “Spares info”.`,
+      "Hi! How can I help today?",
+      "How can I help with Duki today?",
     ],
-    morning:   [`Good morning! ☀️ What can I help you with at HCA today?`],
-    afternoon: [`Good afternoon! 😊 What would you like to know about HCA?`],
-    evening:   [`Good evening! 🌙 Need help with machines or spares?`],
+    morning:   ["Good morning! How can I help today?"],
+    afternoon: ["Good afternoon! How can I help today?"],
+    evening:   ["Good evening! Need help with machines or spares?"],
     thanks: [
-      `You’re welcome! 🙏 Anything else I can do for you about HCA?`,
-      `Happy to help! If you need more info, just ask. 🙂`,
-      `Anytime! If you want, I can also share brochures or connect you to sales.`,
+      "You’re welcome! Anything else I can do?",
+      "Happy to help! Need brochures or a sales connect?",
     ],
     bye: [
-      `Take care! 👋 If you need HCA help later, I’m here.`,
-      `Bye! 👋 Have a great day.`,
+      "Take care! I’m here if you need me.",
+      "Bye! Have a great day.",
     ],
     help: [
-      ` Ask about brands we represent, Duke-Jia flagship, machine suggestions by application, or spares.`,
+      "Ask about flagship lines, suggestions by application, or spares.",
     ],
     ack: [
-      `Got it! 👍 What would you like to ask about HCA next?`,
-      `Okay. Tell me your HCA question—brands, machines, or spares.`,
+      "Got it! What would you like next?",
     ],
   };
 
   const hi = {
     hello: [
-      `Namaste! 👋 HCA Assistant bol raha hoon. HCA se related kuch bhi puchhiye (brands, machines, spares, service).`,
-      `Hello ji! 👋 HCA ke baare mein madad chahiye?`,
-      `Hi! 👋 Try kariye: “Duke-Jia (Embroidery + Perforation) details”, “Leather belts ke liye kaunsi machine?”, “Spares info”.`,
+      "Namaste 👋 Duki se related kya madad chahiye?",
+      "Hello ji 👋 Main madad ke liye hoon—puchhiye.",
     ],
-    morning:   [`Good morning! ☀️ Aaj HCA mein kis cheez mein help chahiye?`],
-    afternoon: [`Good afternoon! 😊 HCA ke baare mein kya jaan’na chahoge?`],
-    evening:   [`Good evening! 🌙 HCA machines/spares par madad chahiye to batayein.`],
+    morning:   ["Good morning! Aaj kis cheez mein help chahiye?"],
+    afternoon: ["Good afternoon! Duki ke baare mein kya jaana hai?"],
+    evening:   ["Good evening! Machines/spares par madad chahiye to batayein."],
     thanks: [
-      `Shukriya! 🙏 Aur kuch madad chahiye to pooch lijiye.`,
-      `Welcome ji! 🙂 Brochure chahiye ya sales connect karu?`,
+      "Shukriya! Aur kuch chahiye to pooch lijiye.",
+      "Welcome ji! Brochure chahiye ya sales connect karu?",
     ],
     bye: [
-      `Theek hai, milte hain! 👋 Jab chahein HCA help ke liye ping kar dijiyega.`,
-      `Bye! 👋 Din shubh rahe.`,
+      "Theek hai, milte hain! Jab chahein ping kar dijiyega.",
+      "Bye! Din shubh rahe.",
     ],
     help: [
-      `Main HCA ke knowledge base se answer karta hoon. Puchhiye: “Hum kin brands ko represent karte hain?”, “Duke-Jia E+P flagship”, “Application-wise machine suggestion”, “Spares”.`,
+      "Try: “Flagship features”, “Application-wise machine suggestion”, “Spares info”.",
     ],
     ack: [
-      `Thik hai! 👍 Ab HCA ke baare mein kya puchhna hai?`,
-      `Okay ji. HCA—brands, machines ya spares—kis par info chahiye?`,
+      "Thik hai! Ab kya puchhna hai?",
     ],
   };
 
@@ -296,12 +346,12 @@ function makeSmallTalkReply(kind, mode) {
 function smallTalkMatch(q) {
   const t = (q || "").trim();
   const patterns = [
-    { kind: "hello",     re: /^(hi+|h[iy]+|hello+|hey( there)?|hlo+|hloo+|yo+|hola|namaste|namaskar|salaam|salam|sup|wass?up|what'?s up|👋|🙏)\b/i },
+    { kind: "hello",     re: /^(hi+|h[iy]+|hello+|hey( there)?|hlo+|yo+|hola|namaste|namaskar|salaam|salam|👋|🙏)\b/i },
     { kind: "morning",   re: /^(good\s*morning|gm)\b/i },
     { kind: "afternoon", re: /^(good\s*afternoon|ga)\b/i },
     { kind: "evening",   re: /^(good\s*evening|ge)\b/i },
     { kind: "ack",       re: /^(ok+|okay+|okk+|hmm+|haan+|ha+|sure|done|great|nice|cool|perfect|thik|theek|fine)\b/i },
-    { kind: "thanks",    re: /^(thanks|thank\s*you|thx|tnx|ty|tx|much\s*(appreciated|thanks)|many\s*thanks|appreciate(d)?|shukriya|dhanyavaad|dhanyavad)\b/i },
+    { kind: "thanks",    re: /^(thanks|thank\s*you|thx|tnx|ty|much\s*(appreciated|thanks)|appreciate(d)?|shukriya|dhanyavaad|dhanyavad)\b/i },
     { kind: "bye",       re: /^(bye|bb|good\s*bye|goodbye|see\s*ya|see\s*you|take\s*care|tc|ciao|gn)\b/i },
     { kind: "help",      re: /(who\s*are\s*you|what\s*can\s*you\s*do|help|menu|options|how\s*to\s*use)\b/i },
   ];
@@ -309,9 +359,8 @@ function smallTalkMatch(q) {
   return null;
 }
 
-
 /* ───────────────────────── Health & Utility APIs ─────────────────────── */
-app.get("/api/health", (_, res) => res.json({ ok: true, ts: Date.now() }));
+app.get("/api/health", (_, res) => res.json({ ok: true, bot: BOT_NAME, ts: Date.now() }));
 
 app.post("/api/reset", sessionMiddleware, (req, res) => {
   req.session.history = [];
@@ -325,10 +374,10 @@ app.get("/api/session", sessionMiddleware, (req, res) => {
     createdAt: req.session.createdAt,
     lastSeen: req.session.lastSeen,
     hits: req.session.hits,
+    bot: BOT_NAME,
   });
 });
 
-/* Optional: expose a light history (last N) for debugging */
 app.get("/api/history", sessionMiddleware, (req, res) => {
   const n = Math.max(0, Math.min(100, parseInt(req.query.n || "20", 10)));
   const last = req.session.history.slice(-n);
@@ -347,14 +396,12 @@ app.post("/api/ask", sessionMiddleware, async (req, res) => {
     const mode = detectResponseMode(q);
     const isFirstTurn = (req.session.history.length === 0);
 
-    // decide if we should greet on the first turn:
-    // greet ONLY when the first user message is a greeting/blank,
-    // NOT when it's a real question.
+    // We greet minimally on first user greeting if frontend already introduced the bot.
     const isBlank = q.replace(/[?.!\s]/g, "") === "";
     const isGreetingWord = /^(hi+|hello+|hey( there)?|hlo+|namaste|namaskar|salaam|gm|ga|ge|👋|🙏)$/i.test(q.trim());
     const shouldGreetFirstTurn = isFirstTurn && (isBlank || isGreetingWord);
 
-    // Quick single-token small talk (gm/ga/ge/hi/thanks/bye)
+    // Single-token small talk quick path
     const short = q.toLowerCase().trim().replace(/[^a-z]/g, "");
     const HELLO_SHORT  = new Set(["hi","hey","yo","sup"]);
     const BYE_SHORT    = new Set(["bye","bb","ciao","gn"]);
@@ -373,54 +420,47 @@ app.post("/api/ask", sessionMiddleware, async (req, res) => {
       null;
 
     if (quickKind) {
-      let reply = makeSmallTalkReply(quickKind, mode);
-      if (shouldGreetFirstTurn && ["hello","morning","afternoon","evening"].includes(quickKind)) {
-        const greet = buildGreeting(mode);
-        if (!/^\s*good\s+(morning|afternoon|evening|night)\b/i.test(reply)) {
-          reply = `${greet}\n\n${reply}`;
-        } else {
-          reply = `${greet}\n\n${reply.replace(/^[\s\S]*?\!?\s*/,"")}`;
-        }
+      let reply;
+      if (shouldGreetFirstTurn && FRONTEND_GREETS && ["hello","morning","afternoon","evening"].includes(quickKind)) {
+        reply = buildMinimalAssist(mode); // minimal one-liner only
+      } else {
+        reply = makeSmallTalkReply(quickKind, mode);
       }
+      const final = POINTWISE_MODE ? toPointWise(reply) : reply;
       req.session.history.push({ role: "user", content: q, ts: Date.now() });
-      req.session.history.push({ role: "assistant", content: reply, ts: Date.now() });
-      return res.json({ answer: reply, reply, sessionId: req.sid, mode, citations: [] });
+      req.session.history.push({ role: "assistant", content: final, ts: Date.now() });
+      return res.json({ answer: final, reply: final, sessionId: req.sid, mode, citations: [] });
     }
 
-    // Regex small-talk
+    // Regex small-talk path
     const kind = smallTalkMatch(q);
     if (kind) {
-      let reply = makeSmallTalkReply(kind, mode);
-      if (shouldGreetFirstTurn && ["hello","morning","afternoon","evening"].includes(kind)) {
-        const greet = buildGreeting(mode);
-        if (!/^\s*good\s+(morning|afternoon|evening|night)\b/i.test(reply)) {
-          reply = `${greet}\n\n${reply}`;
-        } else {
-          reply = `${greet}\n\n${reply.replace(/^[\s\S]*?\!?\s*/,"")}`;
-        }
+      let reply;
+      if (shouldGreetFirstTurn && FRONTEND_GREETS && ["hello","morning","afternoon","evening"].includes(kind)) {
+        reply = buildMinimalAssist(mode); // minimal one-liner only
+      } else {
+        reply = makeSmallTalkReply(kind, mode);
       }
+      const final = POINTWISE_MODE ? toPointWise(reply) : reply;
       req.session.history.push({ role: "user", content: q, ts: Date.now() });
-      req.session.history.push({ role: "assistant", content: reply, ts: Date.now() });
-      return res.json({ answer: reply, reply, sessionId: req.sid, mode, citations: [] });
+      req.session.history.push({ role: "assistant", content: final, ts: Date.now() });
+      return res.json({ answer: final, reply: final, sessionId: req.sid, mode, citations: [] });
     }
 
     // RAG: require vectors
     if (!VECTORS.length) {
       let fallback = mode === "hinglish"
-        ? "Embeddings load nahi hue. Pehle `npm run embed` chalaa kar knowledge base taiyaar kijiye."
-        : "Embeddings are not loaded. Please run `npm run embed` to prepare the knowledge base.";
-      // ⬇️ do NOT prepend greeting here unless the first turn was just a greeting/blank
-      if (shouldGreetFirstTurn) fallback = `${buildGreeting(mode)}\n\n${fallback}`;
+        ? "Reference data abhi load nahi hai. Server par `npm run embed` chalayen, phir dobara poochhiye."
+        : "Reference data isn’t loaded yet. Please run `npm run embed` on the server and try again.";
+      const final = POINTWISE_MODE ? toPointWise(fallback) : fallback;
       req.session.history.push({ role: "user", content: q, ts: Date.now() });
-      req.session.history.push({ role: "assistant", content: fallback, ts: Date.now() });
-      return res.json({ answer: fallback, reply: fallback, sessionId: req.sid, mode, citations: [] });
+      req.session.history.push({ role: "assistant", content: final, ts: Date.now() });
+      return res.json({ answer: final, reply: final, sessionId: req.sid, mode, citations: [] });
     }
 
     // Clean query → embed
     const cleanedQuery = cleanForEmbedding(q) || q.toLowerCase();
-    const embRes = await embedder.embedContent({
-      content: { parts: [{ text: cleanedQuery }] },
-    });
+    const embRes = await embedder.embedContent({ content: { parts: [{ text: cleanedQuery }] } });
     const qVec =
       embRes?.embedding?.values ||
       embRes?.embeddings?.[0]?.values ||
@@ -434,13 +474,13 @@ app.post("/api/ask", sessionMiddleware, async (req, res) => {
 
     const MIN_OK_SCORE = 0.18;
     if (scored.length === 0 || (scored?.[0]?.score ?? 0) < MIN_OK_SCORE) {
-      let tip = mode === "hinglish"
-        ? "Is topic par knowledge base mein clear info nahi mil rahi. Thoda specific likhiye—jaise 'Duke-Jia E+P flagship features' ya 'Highlead 269 application'."
-        : "I couldn’t find clear context in the knowledge base for that. Try being more specific—for example, 'Duke-Jia E+P flagship features' or 'Highlead 269 application'.";
-      if (shouldGreetFirstTurn) tip = `${buildGreeting(mode)}\n\n${tip}`;
+      const tip = mode === "hinglish"
+        ? "Mujhe is par kaafi specifics nahi mil pa rahe. Kripya thoda specific likhiye—jaise 'Dukejia E+P key features' ya 'Highlead 269 applications'."
+        : "I couldn’t find enough details on that. Please try rephrasing or be more specific—like 'Dukejia E+P key features' or 'Highlead 269 applications'.";
+      const finalTip = POINTWISE_MODE ? toPointWise(tip) : tip;
       req.session.history.push({ role: "user", content: q, ts: Date.now() });
-      req.session.history.push({ role: "assistant", content: tip, ts: Date.now() });
-      return res.json({ answer: tip, reply: tip, sessionId: req.sid, mode, citations: [] });
+      req.session.history.push({ role: "assistant", content: finalTip, ts: Date.now() });
+      return res.json({ answer: finalTip, reply: finalTip, sessionId: req.sid, mode, citations: [] });
     }
 
     // Build contextual prompt
@@ -450,13 +490,15 @@ app.post("/api/ask", sessionMiddleware, async (req, res) => {
 
     const languageGuide =
       mode === "hinglish"
-        ? `REPLY LANGUAGE: Hinglish (Hindi in Latin script, e.g., "HCA ka focus automation par hai"). Do NOT use Devanagari.`
+        ? `REPLY LANGUAGE: Hinglish (Hindi in Latin script).`
         : `REPLY LANGUAGE: English. Professional and concise.`;
 
     const systemInstruction = `
-You are HCA's internal assistant. Answer STRICTLY and ONLY from the provided CONTEXT (the HCA knowledge base).
+You are ${BOT_NAME}, Dukejia’s assistant. Answer STRICTLY and ONLY from the provided CONTEXT (the Dukejia knowledge base).
 If the answer is not present in the CONTEXT, reply exactly:
-"I don't have this information in the provided HCA knowledge base."
+"Please contact our sales team at 
+Whatsapp: +91 9350513789 
+Embroidery@grouphca.com"
 
 Rules:
 - Do not invent or add external knowledge.
@@ -475,27 +517,24 @@ ${contextBlocks}
 
 Format:
 - Direct answer grounded in context.
-- If not found: "I don't have this information in the provided HCA knowledge base."
+- If not found: “Please contact our sales team at 
+Whatsapp: +91 9350513789 
+Embroidery@grouphca.com
+”
 - Use the reply language specified above.
 `.trim();
 
     // Call LLM
     req.session.history.push({ role: "user", content: q, ts: Date.now() });
-    const result = await llm.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
+    const result = await llm.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
     let text = result.response.text();
 
-    // ⬇️ Prepend greeting ONLY if first message was greeting/blank
-    if (shouldGreetFirstTurn) {
-      const greet = buildGreeting(mode);
-      if (!/^\s*good\s+(morning|afternoon|evening|night)\b/i.test(text)) {
-        text = `${greet}\n\n${text}`;
-      } else {
-        text = `${greet}\n\n${text.replace(/^[\s\S]*?\!?\s*/,"")}`;
-      }
+    // Server-side bulletization for main answers
+    if (POINTWISE_MODE) {
+      text = toPointWise(text);
     }
 
+    // IMPORTANT: No greeting prepend on the first turn; UI already greeted
     req.session.history.push({ role: "assistant", content: text, ts: Date.now() });
 
     res.json({
@@ -503,6 +542,7 @@ Format:
       reply: text,
       mode,
       sessionId: req.sid,
+      bot: BOT_NAME,
       citations: scored.map((s, i) => ({ idx: i + 1, score: s.score })),
     });
   } catch (err) {
@@ -516,9 +556,8 @@ Format:
   }
 });
 
-
 /* ───────────────────────────── Start Server ──────────────────────────── */
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📎 Static UI at http://localhost:${PORT}/`);
+  console.log(`${BOT_NAME} running on http://localhost:${PORT}`);
+  console.log(` Static UI at http://localhost:${PORT}/`);
 });

@@ -161,7 +161,7 @@ function makeSmallTalkReply(kind, mode) {
   const en = {
     hello: [
       "Hi! How can I help today?",
-      "How can I help with Duki today?",
+      "How can I help you?",
     ],
     morning:   ["Good morning! How can I help today?"],
     afternoon: ["Good afternoon! How can I help today?"],
